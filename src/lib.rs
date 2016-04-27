@@ -56,13 +56,19 @@ impl KalmanFilter {
 #[cfg(test)]
 mod test {
     use jacobian;
+    use KalmanFilter;
     use na::{DMatrix, DVector};
     #[test]
     fn it_works() {
+        let k = KalmanFilter {
+            state: DVector::from_elem(2, 0.0),
+            cov: DMatrix::from_row_vector(2, 2, &vec![100.0, 0.0, 0.0, 100.0]),
+            update_trans: Box::new(|_, x| DVector::from_slice(2, &vec![x[0] + x[1], x[1]])),
+            update_cov: DMatrix::from_elem(1, 1, 0.0),
+            sensor_trans: Box::new(|x| DVector::from_elem(1, x[0])),
+            sensor_cov: DMatrix::from_elem(1, 1, 5.0),
+        };
         // KalmanFilter::new(&vec![0.0,0.0], &vec![0.0,0.0,0.0,0.0], &vec![0.0,0.0,0.0,0.0], &vec![0.0,0.0,0.0,0.0], &vec![0.0,0.0,0.0,0.0], &vec![0.0,0.0,0.0,0.0]);
-        let vals = DVector::from_slice(3, &vec![0.0,1.0,2.0]);
-        let j = jacobian(&vals, &|x| x.clone() * DMatrix::from_row_vector(3, 2, &vec![1.0,2.0,3.0,4.0,5.0,6.0]));
-        println!("{:?}", j);
         assert!(false);
     }
 }
