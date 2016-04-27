@@ -2,19 +2,19 @@ extern crate nalgebra as na;
 
 use na::{DMatrix, DVector, new_identity, Inverse, Transpose};
 
-// struct KalmanFilter {
-//     // means of world state variables, and the current covariance matrix
-//     state: DVector<f64>,
-//     cov: DMatrix<f64>,
-//     // control + old state -> state and error covariance matrix
-//     update_trans: Box<Fn(&DVector<f64>, &DVector<f64>) -> DVector<f64>>,
-//     update_cov: DMatrix<f64>,
-//     // state to sensor readings, and error covariance matrix
-//     sensor_trans: Box<Fn(&DVector<f64>) -> DVector<f64>>,
-//     sensor_cov: DMatrix<f64>
-// }
+pub struct KalmanFilter {
+    // means of world state variables, and the current covariance matrix
+    state: DVector<f64>,
+    cov: DMatrix<f64>,
+    // control + old state -> state and error covariance matrix
+    update_trans: Box<Fn(&DVector<f64>, &DVector<f64>) -> DVector<f64>>,
+    update_cov: DMatrix<f64>,
+    // state to sensor readings, and error covariance matrix
+    sensor_trans: Box<Fn(&DVector<f64>) -> DVector<f64>>,
+    sensor_cov: DMatrix<f64>
+}
 
-fn jacobian(vals: &DVector<f64>, f: &Fn(&DVector<f64>) -> DVector<f64>) -> DMatrix<f64> {
+pub fn jacobian(vals: &DVector<f64>, f: &Fn(&DVector<f64>) -> DVector<f64>) -> DMatrix<f64> {
     let input_len = vals.len();
     let output_len = f(vals).len();
 
@@ -33,33 +33,25 @@ fn jacobian(vals: &DVector<f64>, f: &Fn(&DVector<f64>) -> DVector<f64>) -> DMatr
     DMatrix::from_fn(output_len, input_len, |o, i| cols[i][o])
 }
 
-// impl KalmanFilter {
-//     fn new(initial_state: DVector<f64>,
-//            initial_cov: DMatrix<f64>,
-//            update_trans: Box<Fn(DVector<f64>, DVector<f64>) -> DVector<f64>>,
-//            update_cov: DMatrix<f64>,
-//            sensor_trans: Box<Fn(DVector<f64>) -> DVector<f64>>,
-//            sensor_cov: DMatrix<f64>) {
-//         KalmanFilter {
-//             state: initial_state,
-//             cov: initial_cov,
-//             update_trans: update_trans,
-//             update_cov: update_cov,
-//             sensor_trans: sensor_trans,
-//             sensor_cov: sensor_cov,
-//         }
-//     }
-//     fn update(&mut self, control_data_raw: &Vec<f64>, sensor_data_raw: &Vec<f64>) {
-//         let control_data = DVector::from_slice(control_data_raw.len(), control_data_raw);
-//         let sensor_data = DVector::from_slice(sensor_data_raw.len(), sensor_data_raw);
+impl KalmanFilter {
+    fn update(&mut self, control_data_raw: &Vec<f64>, sensor_data_raw: &Vec<f64>) {
+        let control_data = DVector::from_slice(control_data_raw.len(), control_data_raw);
+        let sensor_data = DVector::from_slice(sensor_data_raw.len(), sensor_data_raw);
 
-//         let state_bar = &self.update_trans(&self.control_data, &self.update_cov);
-//         let cov_bar = &self.a * &self.cov * &self.a.transpose() + &self.a_err;
-//         let kalman_gain = &cov_bar * &self.c.transpose() * (&self.c * &cov_bar * &self.c.transpose()).inverse().unwrap();
-//         self.state = state_bar.clone() + &kalman_gain * (sensor_data - &self.c * state_bar.clone());
-//         self.cov = (new_identity::<DMatrix<f64>>(state_bar.len()) - &kalman_gain * &self.a) * cov_bar;
-//     }
-// }
+        let update_trans = &self.update_trans;
+        let sensor_trans = &self.sensor_trans;
+        let g = jacobian(&self.state, &|x| update_trans(&sensor_data, &x)); // TODO FIX
+        let h = jacobian(&self.state, &|x| sensor_trans(&x));
+
+        let state_bar = update_trans(&control_data, &self.state);
+        let cov_bar = &g * &self.cov * &g.transpose() + &self.update_cov;
+        let kalman_gain = &cov_bar *
+                          &h.transpose() *
+                          (&h * &cov_bar * &h.transpose() + &self.sensor_cov).inverse().unwrap();
+        self.state = state_bar.clone() + &kalman_gain * (sensor_data - sensor_trans(&state_bar));
+        self.cov = (new_identity::<DMatrix<f64>>(state_bar.len()) - &kalman_gain * &h) * cov_bar;
+    }
+}
 
 #[cfg(test)]
 mod test {
