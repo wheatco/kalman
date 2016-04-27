@@ -1,4 +1,5 @@
 extern crate nalgebra as na;
+extern crate rand;
 
 use na::{DMatrix, DVector, new_identity, Inverse, Transpose};
 
@@ -22,11 +23,8 @@ pub fn jacobian(vals: &DVector<f64>, f: &Fn(&DVector<f64>) -> DVector<f64>) -> D
         let mut v = vals.clone();
         let delta: f64 = 1e-8;
         v[i] += delta; // TODO choose a good threshold
-        println!("1: {:?}", &v);
         let output1 = f(&v) - f(&vals);
         let output2 = output1.clone() / delta;
-        println!("2: {:?}", &output1);
-        println!("3: {:?}", &output2);
         output2
     }).collect();
 
@@ -58,16 +56,28 @@ mod test {
     use jacobian;
     use KalmanFilter;
     use na::{DMatrix, DVector};
+    use rand;
+    use rand::distributions::{Normal, IndependentSample};
     #[test]
     fn it_works() {
-        let k = KalmanFilter {
+        let mut k = KalmanFilter {
             state: DVector::from_elem(2, 0.0),
-            cov: DMatrix::from_row_vector(2, 2, &vec![100.0, 0.0, 0.0, 100.0]),
+            cov: DMatrix::from_row_vector(2, 2, &vec![10000.0, 0.0, 0.0, 10000.0]),
             update_trans: Box::new(|_, x| DVector::from_slice(2, &vec![x[0] + x[1], x[1]])),
-            update_cov: DMatrix::from_elem(1, 1, 0.0),
+            update_cov: DMatrix::from_row_vector(2, 2, &vec![0.0, 0.0, 0.0, 0.0]),
             sensor_trans: Box::new(|x| DVector::from_elem(1, x[0])),
-            sensor_cov: DMatrix::from_elem(1, 1, 5.0),
+            sensor_cov: DMatrix::from_elem(1, 1, 300.0),
         };
+        let true_value = |t| 4.0 * (t as f64) + 100.0;
+        println!("time start state {:?}", k.state);
+        let mut r = rand::thread_rng();
+        let n = Normal::new(0.0, 60.0);
+        for t in 0..1000 {
+            let noise = n.ind_sample(&mut r);
+            let loc_w_noise = noise + true_value(t);
+            k.update(&vec![0.0], &vec![loc_w_noise]);
+            println!("time {} noise {} incorrectness {} state {:?}", t, noise, true_value(t) - k.state[0], k.state);
+        }
         // KalmanFilter::new(&vec![0.0,0.0], &vec![0.0,0.0,0.0,0.0], &vec![0.0,0.0,0.0,0.0], &vec![0.0,0.0,0.0,0.0], &vec![0.0,0.0,0.0,0.0], &vec![0.0,0.0,0.0,0.0]);
         assert!(false);
     }
